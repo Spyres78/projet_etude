@@ -1,1 +1,1 @@
-# projet_etude
+# projet d'étude
