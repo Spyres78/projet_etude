@@ -1,8 +1,9 @@
 import requests
-import json
 import urllib3
+from datetime import datetime
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 
 def normalize(url: str) -> str:
     url = url.strip()
@@ -10,13 +11,13 @@ def normalize(url: str) -> str:
         url = "http://" + url
     return url.rstrip("/") + "/wp-json/wp/v2/users/"
 
-def enumerate_users(endpoint: str) -> dict:
+
+def enumerate_users(endpoint: str, export_func=None) -> dict:
     """
-    Retourne:
+    Retourne et exporte :
     {
         "users": [
-            {"id": 1, "username": "admin", "name": "Admin"},
-            ...
+            {"id": 1, "username": "admin", "name": "Admin"}
         ]
     }
     """
@@ -33,32 +34,47 @@ def enumerate_users(endpoint: str) -> dict:
     )
 
     if r.status_code != 200:
-        return {
+        result = {
             "error": f"HTTP {r.status_code}",
             "raw": r.text
         }
+    else:
+        try:
+            data = r.json()
+        except Exception:
+            result = {
+                "error": "Invalid JSON response",
+                "raw": r.text
+            }
+        else:
+            if not isinstance(data, list):
+                result = {
+                    "error": "Unexpected format",
+                    "raw": data
+                }
+            else:
+                users = []
+                for u in data:
+                    users.append({
+                        "id": u.get("id"),
+                        "username": u.get("slug"),
+                        "name": u.get("name")
+                    })
 
-    try:
-        data = r.json()
-    except Exception:
-        return {
-            "error": "Invalid JSON response",
-            "raw": r.text
-        }
+                result = {
+                    "users": users
+                }
 
-    if not isinstance(data, list):
-        return {
-            "error": "Unexpected format",
-            "raw": data
-        }
+    # ✅ EXPORT DANS mdos_global.json
+    if export_func:
+        export_func(
+            tool="wp-user-enum",
+            category="footprinting",
+            target=endpoint,
+            command=f"GET {endpoint}",
+            rc=0 if "users" in result else 1,
+            output=result,
+            extra={"module": "wordpress-users"}
+        )
 
-    users = []
-    for u in data:
-        users.append({
-            "id": u.get("id"),
-            "username": u.get("slug"),
-            "name": u.get("name")
-        })
-    return {
-        "users": users
-    }
+    return result
