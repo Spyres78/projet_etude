@@ -29,7 +29,7 @@ RESET = "\033[0m"
 # -------------------------
 #  Paths / Results
 # -------------------------
-RESULTS_DIR = Path.home() / "MDOS_RESULTS"
+RESULTS_DIR = Path.cwd() / "MDOS_RESULTS"
 GLOBAL_JSON = RESULTS_DIR / "mdos_global.json"
 
 
