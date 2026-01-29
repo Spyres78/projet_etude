@@ -13,6 +13,7 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 import extract_users
+import export_pdf
 
 # -------------------------
 #  Styling (ANSI)
@@ -29,7 +30,7 @@ RESET = "\033[0m"
 # -------------------------
 #  Paths / Results
 # -------------------------
-RESULTS_DIR = Path.home() / "MDOS_RESULTS"
+RESULTS_DIR = Path.cwd() / "MDOS_RESULTS"
 GLOBAL_JSON = RESULTS_DIR / "mdos_global.json"
 
 
@@ -301,7 +302,8 @@ def main():
                 ("4", "Analyse de vulnérabilité"),
                 ("5", "Sniffing"),
                 ("6", "Hacking Web Servers"),
-                ("7", "Quitter"),
+                ("7", "Generate PDF Report"),
+                ("8", "Quitter"),
             ],
         )
 
@@ -454,8 +456,10 @@ def main():
             elif fp == "12":
                 url = input("Entrez l'url de la cible : ").strip()
                 endpoint = extract_users.normalize(url)
-                result = extract_users.enumerate_users(endpoint)
-                print(json.dumps(result, indent=2, ensure_ascii=False))
+                result = extract_users.enumerate_users(
+                    endpoint,
+                    export_func=export_json
+                )
                 pause()
             else:
                 continue
@@ -599,8 +603,12 @@ def main():
             else:
                 continue
 
-        # ---------------- Quit ----------------
         elif choice == "7":
+            print(f"\n{YELLOW}{BOLD}Génération du rapport PDF...{RESET}\n")
+            export_pdf.generate_pdf()
+            pause()
+        # ---------------- Quit ----------------
+        elif choice == "8":
             print(f"\n{GREEN}{BOLD}Bye {pseudo} 👋{RESET}")
             print(f"Résultats: {RESULTS_DIR}")
             sys.exit(0)
