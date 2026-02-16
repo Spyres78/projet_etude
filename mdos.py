@@ -14,6 +14,7 @@ from datetime import datetime
 from pathlib import Path
 import extract_users
 import export_pdf
+import export_notion
 
 # -------------------------
 #  Styling (ANSI)
@@ -130,6 +131,10 @@ def export_json(tool: str, category: str, target: str, command: str, rc: int, ou
 
     out_file.write_text(json.dumps(entry, ensure_ascii=False, indent=2), encoding="utf-8")
     append_global_json(entry)
+    try:
+        export_notion.export_to_notion(entry)
+    except Exception:
+        pass
     return out_file
 
 
@@ -606,6 +611,8 @@ def main():
         elif choice == "7":
             print(f"\n{YELLOW}{BOLD}Génération du rapport PDF...{RESET}\n")
             export_pdf.generate_pdf()
+            print(f"\n{YELLOW}{BOLD}Génération du rapport Notion...{RESET}\n")
+            export_notion.create_notion_report(GLOBAL_JSON)
             pause()
         # ---------------- Quit ----------------
         elif choice == "8":
