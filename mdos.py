@@ -335,10 +335,10 @@ def main():
 
                 if nmap_choice == "1":
                     ip = input("Entrez l'adresse IP à scanner : ").strip()
-                    do_command("nmap", "scans", ip, f"nmap {shlex.quote(ip)} -p-")
+                    do_command("nmap", "scans", ip, f"nmap -p- {shlex.quote(ip)}")
                 elif nmap_choice == "2":
                     subnet = input("Entrez le sous-réseau à scanner : ").strip()
-                    do_command("nmap", "scans", subnet, f"nmap {shlex.quote(subnet)} -p-")
+                    do_command("nmap", "scans", subnet, f"nmap -p- {shlex.quote(subnet)}")
                 elif nmap_choice == "3":
                     ip = input("Entrez l'adresse IP à scanner : ").strip()
                     do_command("nmap", "scans", ip, f"nmap -sV {shlex.quote(ip)}")
