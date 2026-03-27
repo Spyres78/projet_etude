@@ -692,7 +692,7 @@ def main():
             print(f"\n{YELLOW}{BOLD}Génération du rapport Notion...{RESET}\n")
             export_notion.create_notion_report(GLOBAL_JSON)
 
-            print(f"\n{RED}{BOLD}♻️ Reset des résultats en cours...{RESET}")
+            print(f"\n{RED}{BOLD}Reset des résultats en cours...{RESET}")
 
             try:
                 GLOBAL_JSON.write_text("[]", encoding="utf-8")
