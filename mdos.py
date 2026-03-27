@@ -378,7 +378,7 @@ def main():
         if choice == "1":
             scan_tool = menu(
                 "Outils de scan disponibles",
-                [("1", "Nmap"), ("2", "UnicornScan"), ("3", "SX"), ("4", "Hping3"), ("5", "Retour")],
+                [("1", "Nmap"), ("2", "UnicornScan"), ("3", "Hping3"), ("4", "Retour")],
             )
             if scan_tool == "1":
                 nmap_choice = menu(
@@ -422,17 +422,6 @@ def main():
                     continue
 
             elif scan_tool == "3":
-                sx_choice = menu("Commandes SX disponibles", [("1", "Scan ARP (IP/MAC) réseau local"), ("2", "Retour")])
-                if sx_choice == "1":
-                    target = input("Entrez la cible (IP ou CIDR) : ").strip()
-                    print("\n⚠️ Assure-toi d'avoir sx installé/configuré.")
-                    print("TODO: implémenter la commande sx ici.\n")
-                    export_json("sx", "scans", target, "TODO", 0, "TODO: sx not implemented", extra={"todo": True})
-                    pause()
-                else:
-                    continue
-
-            elif scan_tool == "4":
                 h_choice = menu(
                     "Commandes Hping3 disponibles",
                     [
@@ -606,21 +595,32 @@ def main():
                 "Outils d'Analyse de vulnérabilité disponibles",
                 [("1","CWE (MITRE)"),("2","CVE (MITRE)"),("3","NVD (NIST)"),("4","Nikto (scan web)"),("5","Retour")],
             )
+
             if va == "1":
-                webbrowser.open("https://cwe.mitre.org/")
-                export_json("xdg-open", "vuln", "cwe.mitre.org", "open url", 0, "Opened in browser")
-                pause()
+                url = "https://cwe.mitre.org/"
+                webbrowser.open(url)
+                input("Appuie sur Entrée après ta recherche...")
+                prompt_manual_entry(url)
+
             elif va == "2":
-                webbrowser.open("https://cve.mitre.org/")
-                export_json("xdg-open", "vuln", "cve.mitre.org", "open url", 0, "Opened in browser")
-                pause()
+                url = "https://cve.mitre.org/"
+                webbrowser.open(url)
+                input("Appuie sur Entrée après ta recherche...")
+                prompt_manual_entry(url)
+
             elif va == "3":
-                webbrowser.open("https://nvd.nist.gov/")
-                export_json("xdg-open", "vuln", "nvd.nist.gov", "open url", 0, "Opened in browser")
-                pause()
+                url = "https://nvd.nist.gov/"
+                webbrowser.open(url)
+                input("Appuie sur Entrée après ta recherche...")
+                prompt_manual_entry(url)
+
             elif va == "4":
                 site = input("Entrer le site web ou le serveur web cible : ").strip()
                 do_command("nikto", "vuln", site, f"nikto -h {shlex.quote(site)} -Tuning x")
+
+                # 🔥 AJOUT ICI
+                prompt_manual_entry(site)
+
             else:
                 continue
 
@@ -688,8 +688,24 @@ def main():
         elif choice == "7":
             print(f"\n{YELLOW}{BOLD}Génération du rapport PDF...{RESET}\n")
             export_pdf.generate_pdf()
+
             print(f"\n{YELLOW}{BOLD}Génération du rapport Notion...{RESET}\n")
             export_notion.create_notion_report(GLOBAL_JSON)
+
+            print(f"\n{RED}{BOLD}♻️ Reset des résultats en cours...{RESET}")
+
+            try:
+                GLOBAL_JSON.write_text("[]", encoding="utf-8")
+                for sub in RESULTS_DIR.iterdir():
+                    if sub.is_dir():
+                        for file in sub.glob("*.json"):
+                            file.unlink()
+
+                print(f"{GREEN}{BOLD}✅ Reset terminé.{RESET}")
+
+            except Exception as e:
+                print(f"{RED}Erreur lors du reset : {e}{RESET}")
+
             pause()
         # ---------------- Quit ----------------
         elif choice == "8":
