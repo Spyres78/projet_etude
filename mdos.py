@@ -14,6 +14,7 @@ from datetime import datetime
 from pathlib import Path
 import extract_users
 import export_pdf
+import export_notion
 
 # -------------------------
 #  Styling (ANSI)
@@ -32,7 +33,6 @@ RESET = "\033[0m"
 # -------------------------
 RESULTS_DIR = Path.cwd() / "MDOS_RESULTS"
 GLOBAL_JSON = RESULTS_DIR / "mdos_global.json"
-
 
 def safe_mkdir(p: Path) -> None:
     p.mkdir(parents=True, exist_ok=True)
@@ -130,6 +130,10 @@ def export_json(tool: str, category: str, target: str, command: str, rc: int, ou
 
     out_file.write_text(json.dumps(entry, ensure_ascii=False, indent=2), encoding="utf-8")
     append_global_json(entry)
+    try:
+        export_notion.export_to_notion(entry)
+    except Exception:
+        pass
     return out_file
 
 
@@ -270,6 +274,69 @@ def do_command(tool: str, category: str, target: str, command: str, extra: dict 
     print(f"{GREEN}{BOLD}✅ Global JSON:{RESET} {GLOBAL_JSON}\n")
     pause()
 
+def get_clipboard():
+    try:
+        # Linux (xclip)
+        rc, out = run_cmd("xclip -selection clipboard -o")
+        if rc == 0 and out.strip():
+            return out.strip()
+    except Exception:
+        pass
+
+    try:
+        # Wayland (wl-clipboard)
+        rc, out = run_cmd("wl-paste")
+        if rc == 0 and out.strip():
+            return out.strip()
+    except Exception:
+        pass
+
+    return ""
+
+def prompt_manual_entry(source: str):
+    print(f"\n{YELLOW}{BOLD}📝 Ajouter un résultat au rapport ? (y/n){RESET}")
+    choice = input(">>> ").strip().lower()
+
+    if choice != "y":
+        return
+
+    title = input("Titre : ").strip()
+
+    print(f"\n{YELLOW}👉 Appuie sur Entrée pour utiliser le presse-papier automatiquement{RESET}")
+    print(f"{YELLOW}👉 Ou colle manuellement puis Entrée{RESET}")
+
+    content_input = input("Contenu : ").strip()
+
+    # 🔥 si rien tapé → on récupère le clipboard
+    if not content_input:
+        clipboard = get_clipboard()
+        if clipboard:
+            content = clipboard
+            print(f"{GREEN}📋 Contenu récupéré depuis le presse-papier !{RESET}")
+        else:
+            print(f"{RED}⛔ Presse-papier vide et aucun contenu saisi.{RESET}")
+            time.sleep(1)
+            return
+    else:
+        content = content_input
+
+    if not title or not content.strip():
+        print(f"{RED}⛔ Entrée vide, rien sauvegardé.{RESET}")
+        time.sleep(1)
+        return
+
+    export_json(
+        tool="manual",
+        category="notes",
+        target=source,
+        command="manual_entry",
+        rc=0,
+        output=content,
+        extra={"title": title}
+    )
+
+    print(f"{GREEN}{BOLD}✅ Ajouté au rapport !{RESET}")
+    time.sleep(1)
 
 # -------------------------
 #  Main program
@@ -330,10 +397,10 @@ def main():
 
                 if nmap_choice == "1":
                     ip = input("Entrez l'adresse IP à scanner : ").strip()
-                    do_command("nmap", "scans", ip, f"nmap {shlex.quote(ip)} -p-")
+                    do_command("nmap", "scans", ip, f"nmap -p- {shlex.quote(ip)}")
                 elif nmap_choice == "2":
                     subnet = input("Entrez le sous-réseau à scanner : ").strip()
-                    do_command("nmap", "scans", subnet, f"nmap {shlex.quote(subnet)} -p-")
+                    do_command("nmap", "scans", subnet, f"nmap -p- {shlex.quote(subnet)}")
                 elif nmap_choice == "3":
                     ip = input("Entrez l'adresse IP à scanner : ").strip()
                     do_command("nmap", "scans", ip, f"nmap -sV {shlex.quote(ip)}")
@@ -385,7 +452,7 @@ def main():
                     do_command("hping3", "scans", ip, f"hping3 --scan {shlex.quote(ports)} -S {shlex.quote(ip)}")
                 elif h_choice == "3":
                     ip = input("Entrez l'adresse IP à scanner : ").strip()
-                    do_command("hping3", "scans", ip, f"hping3 -1 {shlex.quote(ip)} --rand-dest -I eth0")
+                    do_command("hping3", "scans", ip, f"hping3 -1 {shlex.quote(ip)} --rand-dest -I eth0 -c 10")
                 elif h_choice == "4":
                     ip = input("Entrez l'adresse IP à scanner : ").strip()
                     do_command("hping3", "scans", ip, f"hping3 -2 {shlex.quote(ip)} -p 80 -c 5")
@@ -416,43 +483,57 @@ def main():
                 ],
             )
             if fp == "1":
-                webbrowser.open("https://mattw.io/youtube-metadata/")
-                export_json("xdg-open", "footprinting", "mattw.io", "open url", 0, "Opened in browser")
-                pause()
+                url = "https://mattw.io/youtube-metadata/"
+                webbrowser.open(url)
+                input("Appuie sur Entrée après ta recherche...")
+                prompt_manual_entry(url)
+
             elif fp == "2":
-                webbrowser.open("https://www.searchftps.net/")
-                export_json("xdg-open", "footprinting", "searchftps.net", "open url", 0, "Opened in browser")
-                pause()
+                url = "https://www.searchftps.net/"
+                webbrowser.open(url)
+                input("Appuie sur Entrée après ta recherche...")
+                prompt_manual_entry(url)
+
             elif fp == "3":
                 target = input("Entrez le nom de la cible : ").strip()
                 do_command("theHarvester", "footprinting", target, f"theHarvester -d {shlex.quote(target)} -l 200 -b google")
+
             elif fp == "4":
-                webbrowser.open("https://search.censys.io/?q")
-                export_json("xdg-open", "footprinting", "censys", "open url", 0, "Opened in browser")
-                pause()
+                url = "https://search.censys.io/?q"
+                webbrowser.open(url)
+                input("Appuie sur Entrée après ta recherche...")
+                prompt_manual_entry(url)
+
             elif fp == "5":
                 target = input("Entrez le nom de la cible : ").strip()
                 do_command("theHarvester", "footprinting", target, f"theHarvester -d {shlex.quote(target)} -l 200 -b linkedin")
+
             elif fp == "6":
                 name = input("Entrez le nom de la cible : ").strip()
                 do_command("sherlock", "footprinting", name, f"python3 sherlock {shlex.quote(name)}")
+
             elif fp == "7":
                 site = input("Entrez le site web cible : ").strip()
-                # Writes wordlist.txt
                 do_command("cewl", "footprinting", site, f"cewl -w wordlist.txt -d 2 -m 5 {shlex.quote(site)}")
+
             elif fp == "8":
-                webbrowser.open("http://whois.domaintools.com")
-                export_json("xdg-open", "footprinting", "domaintools", "open url", 0, "Opened in browser")
-                pause()
+                url = "http://whois.domaintools.com"
+                webbrowser.open(url)
+                input("Appuie sur Entrée après ta recherche...")
+                prompt_manual_entry(url)
+
             elif fp == "9":
                 target = input("Entrez la cible (ip/domaine) : ").strip()
                 do_command("traceroute", "footprinting", target, f"traceroute {shlex.quote(target)}")
+
             elif fp == "10":
                 dom = input("Entrez le nom de domaine : ").strip()
                 do_command("domainfy", "footprinting", dom, f"domainfy -n {shlex.quote(dom)} -t all")
+
             elif fp == "11":
                 name = input("Entrez le nom de la cible : ").strip()
                 do_command("searchfy", "footprinting", name, f"searchfy -q {shlex.quote(name)}")
+
             elif fp == "12":
                 url = input("Entrez l'url de la cible : ").strip()
                 endpoint = extract_users.normalize(url)
@@ -461,6 +542,7 @@ def main():
                     export_func=export_json
                 )
                 pause()
+
             else:
                 continue
 
@@ -606,6 +688,8 @@ def main():
         elif choice == "7":
             print(f"\n{YELLOW}{BOLD}Génération du rapport PDF...{RESET}\n")
             export_pdf.generate_pdf()
+            print(f"\n{YELLOW}{BOLD}Génération du rapport Notion...{RESET}\n")
+            export_notion.create_notion_report(GLOBAL_JSON)
             pause()
         # ---------------- Quit ----------------
         elif choice == "8":
