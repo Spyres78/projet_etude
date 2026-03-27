@@ -28,6 +28,10 @@ def clean_text(text):
     text = text.replace("**", "").replace("__", "").strip()
     return text
 
+def split_text(text, max_length=1900):
+    """Découpe le texte pour éviter la limite Notion (2000 chars)"""
+    return [text[i:i+max_length] for i in range(0, len(text), max_length)]
+
 def create_paragraph_block(text):
     """Crée un bloc paragraph simple"""
     return {
@@ -38,21 +42,31 @@ def create_paragraph_block(text):
         }
     }
 
-def create_code_block(text, language=None):
-    """Crée un bloc code avec un langage valide Notion"""
+def create_code_blocks(text, language=None):
+    """Crée plusieurs blocs code si texte trop long"""
     valid_languages = [
         "bash","json","python","plain text","javascript","html","css","sql"
     ]
     if language not in valid_languages:
         language = "plain text"
-    return {
-        "object": "block",
-        "type": "code",
-        "code": {
-            "rich_text": [{"type": "text", "text": {"content": text}}],
-            "language": language
-        }
-    }
+
+    chunks = split_text(text)
+
+    blocks = []
+    for chunk in chunks:
+        blocks.append({
+            "object": "block",
+            "type": "code",
+            "code": {
+                "rich_text": [
+                    {"type": "text", "text": {"content": chunk}}
+                ],
+                "language": language
+            }
+        })
+
+    return blocks
+
 
 def create_toggle_block(title, children):
     """Crée un bloc toggle pour Notion"""
@@ -123,13 +137,12 @@ def create_notion_report(json_path):
                 create_paragraph_block(f"🔹 Outil: {tool}"),
                 create_paragraph_block(f"🔹 Cible: {target}"),
                 create_paragraph_block(f"🔹 Date: {date}"),
-                create_paragraph_block("🔹 Commande:"),
-                create_code_block(command, language="bash"),
-                create_paragraph_block("📄 Résultat:"),
-                create_code_block(pretty_output, language=code_language)
+                create_paragraph_block("🔹 Commande:")
             ]
+            entry_children.extend(create_code_blocks(command, language="bash"))
 
-            # Ajouter un toggle par entrée
+            entry_children.append(create_paragraph_block("📄 Résultat:"))
+            entry_children.extend(create_code_blocks(pretty_output, language=code_language))
             category_children.append(create_toggle_block(f"📂 {tool} → {target}", entry_children))
 
         # Ajouter un toggle pour la catégorie
