@@ -1,0 +1,1373 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MDOS — Access Terminal</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&display=swap');
+
+  :root {
+    --green: #00ff88;
+    --green-dim: #00cc66;
+    --green-ghost: rgba(0,255,136,0.08);
+    --red: #ff2255;
+    --yellow: #ffcc00;
+    --purple: #aa44ff;
+    --cyan: #00ccff;
+    --bg: #020c06;
+    --bg2: #040f0a;
+    --panel: rgba(0,255,136,0.04);
+    --border: rgba(0,255,136,0.18);
+    --text: #b8ffd8;
+    --text-dim: #4a8a65;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  /* Scan lines overlay */
+  body::before {
+    content:'';
+    position: fixed;
+    inset:0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.15) 2px,
+      rgba(0,0,0,0.15) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* Noise texture */
+  body::after {
+    content:'';
+    position: fixed;
+    inset:0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    opacity: 0.4;
+    pointer-events: none;
+    z-index: 9998;
+  }
+
+  /* Grid background */
+  .grid-bg {
+    position: fixed;
+    inset:0;
+    background-image:
+      linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    z-index:0;
+  }
+
+  /* Corner decorations */
+  .corner {
+    position: fixed;
+    width: 60px; height: 60px;
+    border-color: var(--green-dim);
+    border-style: solid;
+    opacity: 0.4;
+    z-index: 10;
+  }
+  .corner-tl { top:12px; left:12px; border-width:2px 0 0 2px; }
+  .corner-tr { top:12px; right:12px; border-width:2px 2px 0 0; }
+  .corner-bl { bottom:12px; left:12px; border-width:0 0 2px 2px; }
+  .corner-br { bottom:12px; right:12px; border-width:0 2px 2px 0; }
+
+  /* Status bar */
+  .statusbar {
+    position: fixed;
+    top:0; left:0; right:0;
+    height: 32px;
+    background: rgba(0,20,10,0.95);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    font-size: 10px;
+    color: var(--text-dim);
+    z-index: 100;
+    letter-spacing: 1px;
+  }
+  .statusbar .status-dot {
+    width:6px; height:6px;
+    border-radius: 50%;
+    background: var(--green);
+    display: inline-block;
+    margin-right: 6px;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity:1; box-shadow: 0 0 6px var(--green); }
+    50% { opacity:0.4; box-shadow: none; }
+  }
+  .statusbar-right { display:flex; gap:20px; }
+  #clock { color: var(--green); }
+
+  /* Main content */
+  .main {
+    position: relative;
+    z-index:1;
+    min-height:100vh;
+    padding: 50px 20px 40px;
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+
+  /* ===== SCREENS ===== */
+  .screen { display:none; animation: fadeIn 0.3s ease; }
+  .screen.active { display:block; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+
+  /* ===== LOGIN SCREEN ===== */
+  .login-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(100vh - 90px);
+    text-align: center;
+    gap: 0;
+  }
+
+  .ascii-art {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: clamp(6px, 1.2vw, 11px);
+    color: var(--green-dim);
+    line-height: 1.2;
+    white-space: pre;
+    animation: glitch-art 8s infinite;
+    filter: drop-shadow(0 0 8px rgba(0,255,136,0.3));
+  }
+  @keyframes glitch-art {
+    0%,95%,100% { transform:none; filter: drop-shadow(0 0 8px rgba(0,255,136,0.3)); }
+    96% { transform:translateX(-2px) skewX(-1deg); filter: drop-shadow(2px 0 0 #ff2255) drop-shadow(-2px 0 0 #00ccff); }
+    97% { transform:translateX(2px) skewX(1deg); filter: drop-shadow(-2px 0 0 #ff2255) drop-shadow(2px 0 0 #00ccff); }
+    98% { transform:none; }
+  }
+
+  .logo-title {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(28px, 5vw, 52px);
+    font-weight: 900;
+    color: var(--green);
+    letter-spacing: 12px;
+    text-shadow: 0 0 20px rgba(0,255,136,0.6), 0 0 60px rgba(0,255,136,0.2);
+    margin: 16px 0 4px;
+    animation: title-glow 3s ease-in-out infinite;
+  }
+  @keyframes title-glow {
+    0%,100% { text-shadow: 0 0 20px rgba(0,255,136,0.6), 0 0 60px rgba(0,255,136,0.2); }
+    50% { text-shadow: 0 0 30px rgba(0,255,136,0.9), 0 0 80px rgba(0,255,136,0.4), 0 0 120px rgba(0,255,136,0.1); }
+  }
+
+  .logo-sub {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 11px;
+    letter-spacing: 6px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 36px;
+  }
+
+  .login-box {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 36px 40px;
+    width: min(420px, 90vw);
+    position: relative;
+    margin-top: 8px;
+  }
+  .login-box::before {
+    content: 'AUTH_REQUIRED';
+    position: absolute;
+    top:-10px; left:16px;
+    background: var(--bg);
+    padding: 0 8px;
+    font-size: 10px;
+    color: var(--green-dim);
+    letter-spacing: 2px;
+  }
+
+  .field-group { margin-bottom: 20px; text-align: left; }
+  .field-group label {
+    display: block;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+  .field-group input {
+    width: 100%;
+    background: rgba(0,255,136,0.04);
+    border: 1px solid var(--border);
+    border-bottom: 1px solid var(--green-dim);
+    color: var(--green);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 15px;
+    padding: 10px 14px;
+    outline: none;
+    transition: all 0.2s;
+    letter-spacing: 1px;
+  }
+  .field-group input:focus {
+    border-color: var(--green);
+    background: rgba(0,255,136,0.08);
+    box-shadow: 0 0 12px rgba(0,255,136,0.15);
+  }
+  .field-group input::placeholder { color: var(--text-dim); opacity: 0.5; }
+
+  .totp-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .totp-row input { flex:1; letter-spacing: 6px; font-size: 20px; text-align:center; }
+
+  .btn-primary {
+    width: 100%;
+    background: transparent;
+    border: 1px solid var(--green);
+    color: var(--green);
+    font-family: 'Orbitron', monospace;
+    font-size: 12px;
+    letter-spacing: 4px;
+    padding: 14px 20px;
+    cursor: pointer;
+    text-transform: uppercase;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.2s;
+    margin-top: 8px;
+  }
+  .btn-primary::before {
+    content:'';
+    position:absolute;
+    inset:0;
+    background: var(--green);
+    transform: translateX(-101%);
+    transition: transform 0.3s ease;
+    z-index:0;
+  }
+  .btn-primary:hover::before { transform:translateX(0); }
+  .btn-primary:hover { color: var(--bg); }
+  .btn-primary span { position:relative; z-index:1; }
+
+  .error-msg {
+    color: var(--red);
+    font-size: 11px;
+    margin-top: 10px;
+    letter-spacing: 1px;
+    animation: fadeIn 0.3s ease;
+    display: none;
+  }
+  .error-msg.show { display:block; }
+
+  .progress-bar-wrap {
+    width:100%; height:2px; background: rgba(0,255,136,0.1);
+    margin-top: 14px;
+    display: none;
+  }
+  .progress-bar-wrap.show { display:block; }
+  .progress-bar {
+    height:100%;
+    background: var(--green);
+    width:0%;
+    box-shadow: 0 0 8px var(--green);
+    transition: width 1.5s ease;
+  }
+
+  /* ===== MAIN MENU ===== */
+  .menu-header {
+    margin-bottom: 32px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .menu-header-left { }
+  .welcome-line {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .welcome-pseudo {
+    font-family: 'Orbitron', monospace;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--green);
+    text-shadow: 0 0 12px rgba(0,255,136,0.4);
+  }
+  .session-info {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-align: right;
+    line-height: 1.6;
+  }
+
+  .menu-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .menu-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 20px 22px;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    group: true;
+  }
+  .menu-card::after {
+    content:'';
+    position:absolute;
+    left:0; top:0; bottom:0;
+    width: 2px;
+    background: var(--green);
+    transform: scaleY(0);
+    transition: transform 0.2s;
+    transform-origin: bottom;
+  }
+  .menu-card:hover {
+    border-color: rgba(0,255,136,0.5);
+    background: rgba(0,255,136,0.07);
+    transform: translateX(4px);
+  }
+  .menu-card:hover::after { transform: scaleY(1); }
+  .menu-card.danger { border-color: rgba(255,34,85,0.2); }
+  .menu-card.danger::after { background: var(--red); }
+  .menu-card.danger:hover { border-color: rgba(255,34,85,0.5); background: rgba(255,34,85,0.07); }
+
+  .card-num {
+    font-family: 'Orbitron', monospace;
+    font-size: 22px;
+    font-weight: 900;
+    color: var(--green-dim);
+    min-width: 36px;
+    line-height: 1;
+  }
+  .menu-card.danger .card-num { color: rgba(255,34,85,0.5); }
+
+  .card-content { flex:1; }
+  .card-title {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+  .card-desc {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+  .card-arrow {
+    color: var(--text-dim);
+    font-size: 14px;
+    transition: transform 0.2s, color 0.2s;
+  }
+  .menu-card:hover .card-arrow { transform: translateX(4px); color: var(--green); }
+
+  /* ===== SUB MENU ===== */
+  .submenu-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 28px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .back-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    padding: 7px 14px;
+    cursor: pointer;
+    letter-spacing: 2px;
+    transition: all 0.2s;
+  }
+  .back-btn:hover { border-color: var(--green); color: var(--green); }
+  .submenu-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--green);
+    letter-spacing: 4px;
+    text-transform: uppercase;
+  }
+  .submenu-list { display: flex; flex-direction:column; gap: 8px; }
+  .sub-item {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 16px 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    transition: all 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+  .sub-item:hover {
+    border-color: rgba(0,255,136,0.4);
+    background: rgba(0,255,136,0.06);
+    padding-left: 26px;
+  }
+  .sub-item-num {
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    color: var(--green-dim);
+    min-width: 24px;
+  }
+  .sub-item-label {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .sub-badge {
+    margin-left: auto;
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 2px 8px;
+  }
+
+  /* ===== COMMAND PANEL ===== */
+  .cmd-panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 24px;
+    position: relative;
+    margin-top: 4px;
+  }
+  .cmd-panel::before {
+    content: attr(data-label);
+    position: absolute;
+    top:-10px; left:16px;
+    background: var(--bg);
+    padding: 0 8px;
+    font-size: 10px;
+    color: var(--green-dim);
+    letter-spacing: 2px;
+  }
+
+  .cmd-field { margin-bottom: 16px; }
+  .cmd-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .cmd-input {
+    width: 100%;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--border);
+    color: var(--green);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 14px;
+    padding: 10px 14px;
+    outline: none;
+    transition: all 0.2s;
+  }
+  .cmd-input:focus {
+    border-color: var(--green-dim);
+    box-shadow: inset 0 0 20px rgba(0,255,136,0.05);
+  }
+
+  .cmd-preview {
+    background: rgba(0,0,0,0.5);
+    border: 1px solid rgba(0,255,136,0.1);
+    padding: 12px 16px;
+    font-size: 12px;
+    color: var(--cyan);
+    letter-spacing: 1px;
+    word-break: break-all;
+    margin-bottom: 16px;
+    min-height: 38px;
+  }
+  .cmd-preview-label {
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    margin-bottom: 6px;
+  }
+
+  .btn-run {
+    background: transparent;
+    border: 1px solid var(--green);
+    color: var(--green);
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    letter-spacing: 3px;
+    padding: 12px 24px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.2s;
+    position: relative;
+    overflow:hidden;
+  }
+  .btn-run:hover { background: var(--green); color: var(--bg); }
+
+  .btn-secondary {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    padding: 12px 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-left: 10px;
+  }
+  .btn-secondary:hover { border-color: var(--green-dim); color: var(--green-dim); }
+
+  /* ===== TERMINAL OUTPUT ===== */
+  .terminal {
+    background: #010a04;
+    border: 1px solid var(--border);
+    border-top: none;
+    padding: 16px;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--green-dim);
+    max-height: 280px;
+    overflow-y: auto;
+    display: none;
+    position: relative;
+  }
+  .terminal.show { display:block; }
+  .terminal::before {
+    content:'▶ OUTPUT';
+    display: block;
+    color: var(--text-dim);
+    font-size: 9px;
+    letter-spacing: 3px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .terminal::-webkit-scrollbar { width: 4px; }
+  .terminal::-webkit-scrollbar-track { background: transparent; }
+  .terminal::-webkit-scrollbar-thumb { background: var(--green-dim); }
+
+  .t-line { display: block; }
+  .t-line.success { color: var(--green); }
+  .t-line.error { color: var(--red); }
+  .t-line.warn { color: var(--yellow); }
+  .t-line.info { color: var(--cyan); }
+  .t-cursor {
+    display: inline-block;
+    width: 8px; height: 14px;
+    background: var(--green);
+    animation: blink 1s step-end infinite;
+    vertical-align: middle;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  /* ===== NOTIFICATIONS ===== */
+  .notif {
+    position: fixed;
+    bottom: 20px; right: 20px;
+    background: rgba(0,20,10,0.97);
+    border: 1px solid var(--green);
+    padding: 14px 18px;
+    font-size: 12px;
+    color: var(--green);
+    letter-spacing: 1px;
+    z-index: 1000;
+    transform: translateX(120%);
+    transition: transform 0.3s ease;
+    max-width: 320px;
+    box-shadow: 0 0 20px rgba(0,255,136,0.2);
+  }
+  .notif.show { transform: translateX(0); }
+  .notif.error { border-color: var(--red); color: var(--red); box-shadow: 0 0 20px rgba(255,34,85,0.2); }
+
+  /* ===== REPORT SCREEN ===== */
+  .report-panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 24px;
+  }
+  .report-entry {
+    border-bottom: 1px solid rgba(0,255,136,0.06);
+    padding: 14px 0;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  .report-entry:last-child { border-bottom: none; }
+  .entry-tool {
+    font-family: 'Orbitron', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--cyan);
+    min-width: 90px;
+    letter-spacing: 1px;
+  }
+  .entry-target {
+    font-size: 13px;
+    color: var(--text);
+    flex:1;
+  }
+  .entry-cmd {
+    font-size: 11px;
+    color: var(--text-dim);
+    word-break: break-all;
+    margin-top: 2px;
+  }
+  .entry-time {
+    font-size: 10px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    letter-spacing: 1px;
+  }
+  .entry-rc-ok { color: var(--green); font-size:11px; }
+  .entry-rc-err { color: var(--red); font-size:11px; }
+  .report-empty {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 13px;
+    padding: 40px;
+    letter-spacing: 2px;
+  }
+
+  /* spinner */
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid rgba(0,255,136,0.2);
+    border-top-color: var(--green);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* scrollbar global */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(0,255,136,0.2); }
+
+  /* glitch text effect */
+  .glitch {
+    position: relative;
+    display: inline-block;
+  }
+  .glitch::before, .glitch::after {
+    content: attr(data-text);
+    position: absolute;
+    inset:0;
+    opacity: 0;
+  }
+  .glitch:hover::before {
+    opacity:1;
+    color: var(--red);
+    clip-path: polygon(0 30%, 100% 30%, 100% 50%, 0 50%);
+    transform: translateX(-2px);
+    animation: glitch1 0.4s steps(2) infinite;
+  }
+  .glitch:hover::after {
+    opacity:1;
+    color: var(--cyan);
+    clip-path: polygon(0 60%, 100% 60%, 100% 75%, 0 75%);
+    transform: translateX(2px);
+    animation: glitch2 0.4s steps(2) infinite;
+  }
+  @keyframes glitch1 { 0%{transform:translateX(-2px)} 100%{transform:translateX(2px)} }
+  @keyframes glitch2 { 0%{transform:translateX(2px)} 100%{transform:translateX(-2px)} }
+
+  .tag {
+    display: inline-block;
+    font-size: 9px;
+    letter-spacing: 2px;
+    padding: 2px 8px;
+    border: 1px solid;
+    text-transform: uppercase;
+    margin-left: 8px;
+  }
+  .tag-scan { border-color: var(--cyan); color: var(--cyan); }
+  .tag-recon { border-color: var(--purple); color: var(--purple); }
+  .tag-vuln { border-color: var(--red); color: var(--red); }
+  .tag-sniff { border-color: var(--yellow); color: var(--yellow); }
+  .tag-web { border-color: var(--green); color: var(--green); }
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+<div class="corner corner-tl"></div>
+<div class="corner corner-tr"></div>
+<div class="corner corner-bl"></div>
+<div class="corner corner-br"></div>
+
+<!-- Status Bar -->
+<div class="statusbar">
+  <div><span class="status-dot"></span> MDOS SYSTEM ONLINE &nbsp;|&nbsp; v2.0.0 &nbsp;|&nbsp; SECURE CHANNEL</div>
+  <div class="statusbar-right">
+    <span id="clock"></span>
+    <span id="status-user" style="color:var(--text-dim)">NOT_AUTH</span>
+  </div>
+</div>
+
+<!-- Notification -->
+<div class="notif" id="notif"></div>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- ===== SCREEN: LOGIN ===== -->
+  <div class="screen active" id="screen-login">
+    <div class="login-screen">
+      <div class="ascii-art">
+⠀⠀⠀⠀⠀⢸⠓⢄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⢸⠀⠀⠑⢤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⢸⡆⠀⠀⠀⠙⢤⡷⣤⣦⣀⠤⠖⠚⡿⠁⠀⠀⠀⠀⠀
+⣠⡿⠢⢄⡀⠀⡇⠀⠀⠀⠀⠀⠉⠀⠀⠀⠀⠀⠸⠷⣶⠂⠀⠀⠀⠀
+⢸⣃⠀⠀⠉⠳⣷⠞⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠉⠉⠉⠉⠉
+⠀⠘⣆⠀⠀⠀⠁⠀⢀⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠘⣦⠆⠀⠀⢀⡎⢹⡀⠀⠀⠀⠀⠀⠀⠀⠀⡀⠀⠀⡀⣠⠔⠋
+⠀⠀⠀⡏⠀⠀⣆⠘⣄⠸⢧⠀⠀⠀⠀⢀⣠⠖⢻⠀⠀⠀⣿⢥⣄⣀
+⠀⠀⢸⠁⠀⠀⡏⢣⣌⠙⠚⠀⠀⠠⣖⡛⠀⣠⠏⠀⠀⠀⠇⠀⠀⠀</div>
+
+      <div class="logo-title glitch" data-text="MDOS">MDOS</div>
+      <div class="logo-sub">Multitool OSINT & Detection Operations System</div>
+
+      <div class="login-box">
+        <div class="field-group">
+          <label>// Identifiant</label>
+          <input type="text" id="inp-pseudo" placeholder="pseudo_" autocomplete="off" />
+        </div>
+        <div class="field-group">
+          <label>// TOTP Code (Google Authenticator)</label>
+          <div class="totp-row">
+            <input type="text" id="inp-totp" placeholder="000000" maxlength="6" inputmode="numeric" />
+          </div>
+        </div>
+        <button class="btn-primary" onclick="doLogin()"><span>▶ ACCESS_GRANT</span></button>
+        <div class="error-msg" id="login-error">⛔ CODE INVALIDE — ACCÈS REFUSÉ</div>
+        <div class="progress-bar-wrap" id="login-progress"><div class="progress-bar" id="pbar"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SCREEN: MAIN MENU ===== -->
+  <div class="screen" id="screen-menu">
+    <div class="menu-header">
+      <div class="menu-header-left">
+        <div class="welcome-line">// Session active</div>
+        <div class="welcome-pseudo" id="display-pseudo">UNKNOWN</div>
+      </div>
+      <div class="session-info" id="session-info">
+        HOST: localhost<br>
+        RESULTS: ./MDOS_RESULTS/<br>
+        JSON: mdos_global.json
+      </div>
+    </div>
+
+    <div class="menu-grid">
+      <div class="menu-card" onclick="showSub('network')">
+        <div class="card-num">01</div>
+        <div class="card-content">
+          <div class="card-title">Network Scan <span class="tag tag-scan">SCAN</span></div>
+          <div class="card-desc">nmap · unicornscan · hping3 · sx</div>
+        </div>
+        <div class="card-arrow">▶</div>
+      </div>
+      <div class="menu-card" onclick="showSub('footprint')">
+        <div class="card-num">02</div>
+        <div class="card-content">
+          <div class="card-title">Footprinting <span class="tag tag-recon">RECON</span></div>
+          <div class="card-desc">theHarvester · sherlock · whois · cewl</div>
+        </div>
+        <div class="card-arrow">▶</div>
+      </div>
+      <div class="menu-card" onclick="showSub('enum')">
+        <div class="card-num">03</div>
+        <div class="card-content">
+          <div class="card-title">Enumeration <span class="tag tag-recon">ENUM</span></div>
+          <div class="card-desc">NetBIOS · SNMP · LDAP · DNS · SMTP</div>
+        </div>
+        <div class="card-arrow">▶</div>
+      </div>
+      <div class="menu-card" onclick="showSub('vuln')">
+        <div class="card-num">04</div>
+        <div class="card-content">
+          <div class="card-title">Vulnérabilité <span class="tag tag-vuln">VULN</span></div>
+          <div class="card-desc">CWE · CVE · NVD · Nikto</div>
+        </div>
+        <div class="card-arrow">▶</div>
+      </div>
+      <div class="menu-card" onclick="showSub('sniff')">
+        <div class="card-num">05</div>
+        <div class="card-content">
+          <div class="card-title">Sniffing <span class="tag tag-sniff">SNIFF</span></div>
+          <div class="card-desc">macof · arpspoof · macchanger</div>
+        </div>
+        <div class="card-arrow">▶</div>
+      </div>
+      <div class="menu-card" onclick="showSub('web')">
+        <div class="card-num">06</div>
+        <div class="card-content">
+          <div class="card-title">Web Servers <span class="tag tag-web">WEB</span></div>
+          <div class="card-desc">nmap http · uniscan · brute force</div>
+        </div>
+        <div class="card-arrow">▶</div>
+      </div>
+      <div class="menu-card" onclick="showReport()">
+        <div class="card-num">07</div>
+        <div class="card-content">
+          <div class="card-title">Rapport PDF / Notion</div>
+          <div class="card-desc">Exporter les résultats de session</div>
+        </div>
+        <div class="card-arrow">▶</div>
+      </div>
+      <div class="menu-card danger" onclick="doQuit()">
+        <div class="card-num">08</div>
+        <div class="card-content">
+          <div class="card-title" style="color:var(--red)">Quitter</div>
+          <div class="card-desc">Terminer la session</div>
+        </div>
+        <div class="card-arrow" style="color:var(--red)">✕</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SCREEN: SUBMENU ===== -->
+  <div class="screen" id="screen-sub">
+    <div class="submenu-header">
+      <button class="back-btn" onclick="goBack()">◀ RETOUR</button>
+      <div class="submenu-title" id="sub-title">TOOLS</div>
+    </div>
+    <div class="submenu-list" id="sub-list"></div>
+  </div>
+
+  <!-- ===== SCREEN: COMMAND ===== -->
+  <div class="screen" id="screen-cmd">
+    <div class="submenu-header">
+      <button class="back-btn" onclick="goBackCmd()">◀ RETOUR</button>
+      <div class="submenu-title" id="cmd-title">EXECUTE</div>
+    </div>
+    <div id="cmd-fields"></div>
+    <div class="cmd-panel" data-label="CMD_PREVIEW">
+      <div class="cmd-preview-label">// Commande générée</div>
+      <div class="cmd-preview" id="cmd-preview">—</div>
+      <button class="btn-run" onclick="executeCmd()"><span class="spinner" id="run-spinner" style="display:none"></span>▶ EXÉCUTER</button>
+      <button class="btn-secondary" onclick="copyCmd()">⎘ COPIER</button>
+    </div>
+    <div class="terminal" id="terminal"></div>
+  </div>
+
+  <!-- ===== SCREEN: REPORT ===== -->
+  <div class="screen" id="screen-report">
+    <div class="submenu-header">
+      <button class="back-btn" onclick="goBack()">◀ RETOUR</button>
+      <div class="submenu-title">RAPPORT DE SESSION</div>
+    </div>
+    <div class="report-panel" id="report-content"></div>
+  </div>
+
+</div>
+
+<script>
+// =====================
+// STATE
+// =====================
+let pseudo = '';
+let sessionLog = [];
+let currentSub = '';
+let currentCmdConfig = null;
+let lastSubScreen = '';
+
+// =====================
+// CLOCK
+// =====================
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString('fr-FR', {hour12:false}) + '  ' + now.toLocaleDateString('fr-FR');
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// =====================
+// SCREEN MANAGEMENT
+// =====================
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// =====================
+// NOTIFICATIONS
+// =====================
+function notify(msg, isError=false) {
+  const n = document.getElementById('notif');
+  n.textContent = msg;
+  n.className = 'notif' + (isError ? ' error' : '') + ' show';
+  setTimeout(() => n.classList.remove('show'), 3500);
+}
+
+// =====================
+// LOGIN
+// =====================
+function doLogin() {
+  const p = document.getElementById('inp-pseudo').value.trim();
+  const totp = document.getElementById('inp-totp').value.trim();
+
+  if (!p) { showError('⚠ PSEUDO REQUIS'); return; }
+  if (totp.length !== 6 || !/^\d+$/.test(totp)) {
+    showError('⚠ CODE TOTP INVALIDE (6 chiffres requis)');
+    return;
+  }
+
+  document.getElementById('login-error').classList.remove('show');
+  document.getElementById('login-progress').classList.add('show');
+  setTimeout(() => { document.getElementById('pbar').style.width = '100%'; }, 50);
+
+  setTimeout(() => {
+    pseudo = p;
+    document.getElementById('display-pseudo').textContent = pseudo.toUpperCase();
+    document.getElementById('status-user').textContent = pseudo.toUpperCase();
+    document.getElementById('session-info').innerHTML =
+      `HOST: ${pseudo.toLowerCase()}-machine<br>RESULTS: ./MDOS_RESULTS/<br>SESSION: ${new Date().toLocaleTimeString()}`;
+    notify('✅ Authentification réussie. Bienvenue ' + pseudo + ' !');
+    showScreen('screen-menu');
+  }, 1600);
+}
+
+function showError(msg) {
+  const el = document.getElementById('login-error');
+  el.textContent = msg;
+  el.classList.add('show');
+  document.getElementById('login-progress').classList.remove('show');
+  document.getElementById('pbar').style.width = '0%';
+}
+
+document.getElementById('inp-totp').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+
+// =====================
+// MENUS CONFIG
+// =====================
+const SUBMENUS = {
+
+  network: {
+    title: 'NETWORK SCAN',
+    items: [
+      { label: 'Nmap — Ports ouverts (IP)', badge: 'TCP', fields: [{id:'ip',label:'Adresse IP cible'}], cmd: ip => `nmap -p- ${ip}` },
+      { label: 'Nmap — Ports ouverts (Subnet)', badge: 'CIDR', fields: [{id:'subnet',label:'Sous-réseau (ex: 192.168.1.0/24)'}], cmd: s => `nmap -p- ${s}` },
+      { label: 'Nmap — Services', badge: 'SV', fields: [{id:'ip',label:'Adresse IP cible'}], cmd: ip => `nmap -sV ${ip}` },
+      { label: 'Nmap — OS Detection', badge: 'OS', fields: [{id:'ip',label:'Adresse IP cible'}], cmd: ip => `nmap -O ${ip}` },
+      { label: 'Nmap — Scan agressif', badge: 'AGG', fields: [{id:'ip',label:'Adresse IP cible'}], cmd: ip => `nmap -A ${ip}` },
+      { label: 'UnicornScan — OS (TTL)', badge: 'TTL', fields: [{id:'ip',label:'Adresse IP cible'}], cmd: ip => `unicornscan ${ip} -Iv`, hint: 'Linux/FreeBSD=64  Windows=128  Cisco=255' },
+      { label: 'Hping3 — SYN Scan (0-100)', badge: 'SYN', fields: [{id:'ip',label:'Adresse IP cible'}], cmd: ip => `hping3 -8 0-100 -S ${ip} -V` },
+      { label: 'Hping3 — Port Range', badge: 'RANGE', fields: [{id:'ip',label:'IP cible'},{id:'ports',label:'Range ports (ex: 0-65536)'}], cmd: (ip,ports) => `hping3 --scan ${ports} -S ${ip}` },
+      { label: 'Hping3 — UDP test port 80', badge: 'UDP', fields: [{id:'ip',label:'Adresse IP cible'}], cmd: ip => `hping3 -2 ${ip} -p 80 -c 5` },
+    ]
+  },
+
+  footprint: {
+    title: 'FOOTPRINTING & RECON',
+    items: [
+      { label: 'theHarvester — Emails (Google)', badge: 'EMAIL', fields: [{id:'target',label:'Nom de domaine cible'}], cmd: t => `theHarvester -d ${t} -l 200 -b google` },
+      { label: 'theHarvester — LinkedIn', badge: 'LI', fields: [{id:'target',label:'Nom de domaine cible'}], cmd: t => `theHarvester -d ${t} -l 200 -b linkedin` },
+      { label: 'Sherlock — Profils réseaux', badge: 'OSINT', fields: [{id:'name',label:'Nom / Username cible'}], cmd: n => `python3 sherlock ${n}` },
+      { label: 'CEWL — Wordlist depuis site', badge: 'WL', fields: [{id:'site',label:'URL du site cible'}], cmd: s => `cewl -w wordlist.txt -d 2 -m 5 ${s}` },
+      { label: 'Traceroute', badge: 'TRACE', fields: [{id:'target',label:'IP ou domaine cible'}], cmd: t => `traceroute ${t}` },
+      { label: 'domainfy — Vérif domaines', badge: 'DOM', fields: [{id:'dom',label:'Nom de domaine'}], cmd: d => `domainfy -n ${d} -t all` },
+      { label: 'searchfy — Réseaux sociaux', badge: 'SRCH', fields: [{id:'name',label:'Nom cible'}], cmd: n => `searchfy -q ${n}` },
+      { label: 'mattw.io — YouTube Metadata', badge: 'URL', fields: [], cmd: () => '# Ouverture navigateur : https://mattw.io/youtube-metadata/', isUrl: 'https://mattw.io/youtube-metadata/' },
+      { label: 'SearchFTPS — FTP public', badge: 'URL', fields: [], cmd: () => '# Ouverture navigateur : https://www.searchftps.net/', isUrl: 'https://www.searchftps.net/' },
+      { label: 'Censys — OS via IP', badge: 'URL', fields: [], cmd: () => '# Ouverture navigateur : https://search.censys.io/', isUrl: 'https://search.censys.io/' },
+      { label: 'DomainTools — Whois', badge: 'URL', fields: [], cmd: () => '# Ouverture navigateur : http://whois.domaintools.com', isUrl: 'http://whois.domaintools.com' },
+    ]
+  },
+
+  enum: {
+    title: 'ÉNUMÉRATION',
+    items: [
+      { label: 'NetBIOS (nbstat NSE)', badge: 'SMB', fields: [{id:'ip',label:'IP cible'}], cmd: ip => `nmap -sV -v --script nbstat.nse ${ip}` },
+      { label: 'SNMP — snmp-check', badge: 'SNMP', fields: [{id:'ip',label:'IP cible'}], cmd: ip => `snmp-check ${ip}` },
+      { label: 'SNMP — snmpwalk', badge: 'SNMP', fields: [{id:'ip',label:'IP cible'}], cmd: ip => `snmpwalk -v2c -c public ${ip}` },
+      { label: 'SNMP — nmap UDP processes', badge: 'UDP', fields: [{id:'ip',label:'IP cible'},{id:'port',label:'Port UDP'}], cmd: (ip,port) => `nmap -sU -p ${port} --script=snmp-processes ${ip}` },
+      { label: 'LDAP — namingcontexts', badge: 'LDAP', fields: [{id:'ip',label:'IP serveur LDAP'}], cmd: ip => `ldapsearch -h ${ip} -x -s base namingcontexts` },
+      { label: 'DNS — broadcast discovery', badge: 'DNS', fields: [{id:'dom',label:'Nom de domaine'}], cmd: d => `nmap --script=broadcast-dns-service-discovery ${d}` },
+      { label: 'DNS — brute force', badge: 'DNS', fields: [{id:'dom',label:'Nom de domaine'}], cmd: d => `nmap -T4 -p 53 --script dns-brute ${d}` },
+      { label: 'SMTP — enum-users', badge: 'SMTP', fields: [{id:'ip',label:'IP serveur SMTP'}], cmd: ip => `nmap -p 25 --script=smtp-enum-users ${ip}` },
+      { label: 'SMTP — open-relay', badge: 'SMTP', fields: [{id:'ip',label:'IP serveur SMTP'}], cmd: ip => `nmap -p 25 --script=smtp-open-relay ${ip}` },
+    ]
+  },
+
+  vuln: {
+    title: 'ANALYSE VULNÉRABILITÉ',
+    items: [
+      { label: 'Nikto — Web Scan', badge: 'NIKTO', fields: [{id:'site',label:'URL ou IP du serveur web'}], cmd: s => `nikto -h ${s} -Tuning x` },
+      { label: 'CWE — MITRE', badge: 'URL', fields: [], cmd: () => '# Ouverture : https://cwe.mitre.org/', isUrl: 'https://cwe.mitre.org/' },
+      { label: 'CVE — MITRE', badge: 'URL', fields: [], cmd: () => '# Ouverture : https://cve.mitre.org/', isUrl: 'https://cve.mitre.org/' },
+      { label: 'NVD — NIST', badge: 'URL', fields: [], cmd: () => '# Ouverture : https://nvd.nist.gov/', isUrl: 'https://nvd.nist.gov/' },
+    ]
+  },
+
+  sniff: {
+    title: 'SNIFFING',
+    items: [
+      { label: 'MAC Flooding (macof)', badge: 'FLOOD', fields: [{id:'iface',label:'Interface (ex: eth0)'},{id:'nb',label:'Nombre de paquets'}], cmd: (i,n) => `macof -i ${i} -n ${n}` },
+      { label: 'ARP Spoof (arpspoof)', badge: 'ARP', fields: [{id:'ip_cible',label:'IP cible'},{id:'gw',label:'IP passerelle'}], cmd: (ip,gw) => `arpspoof -i eth0 -t ${gw} ${ip}` },
+      { label: 'MAC Spoof (macchanger)', badge: 'MAC', fields: [{id:'iface',label:'Interface réseau'}], cmd: i => `sudo ifconfig ${i} down && sudo macchanger -r ${i} && sudo ifconfig ${i} up && ifconfig` },
+    ]
+  },
+
+  web: {
+    title: 'HACKING WEB SERVERS',
+    items: [
+      { label: 'Nmap — http-enum', badge: 'HTTP', fields: [{id:'target',label:'Domaine ou IP'}], cmd: t => `nmap -sV --script=http-enum ${t}` },
+      { label: 'Nmap — hostmap-bfk', badge: 'MAP', fields: [{id:'target',label:'Domaine ou IP'}], cmd: t => `nmap --script hostmap-bfk --script-args hostmap-bfk.prefix=hostmap- ${t}` },
+      { label: 'Nmap — http-trace', badge: 'TRACE', fields: [{id:'target',label:'Domaine ou IP'}], cmd: t => `nmap --script http-trace -d ${t}` },
+      { label: 'Nmap — WAF Detect', badge: 'WAF', fields: [{id:'target',label:'Domaine ou IP'}], cmd: t => `nmap -p80 --script http-waf-detect ${t}` },
+      { label: 'Uniscan — Simple', badge: 'UNI', fields: [{id:'target',label:'Domaine ou IP'}], cmd: t => `uniscan -u ${t} -q` },
+      { label: 'Uniscan — Dynamique (long)', badge: 'DYN', fields: [{id:'target',label:'Domaine ou IP'}], cmd: t => `uniscan -u ${t} -d` },
+    ]
+  }
+};
+
+// =====================
+// SUB MENU
+// =====================
+function showSub(key) {
+  currentSub = key;
+  lastSubScreen = 'screen-menu';
+  const cfg = SUBMENUS[key];
+  document.getElementById('sub-title').textContent = cfg.title;
+  const list = document.getElementById('sub-list');
+  list.innerHTML = '';
+  cfg.items.forEach((item, i) => {
+    const div = document.createElement('div');
+    div.className = 'sub-item';
+    div.innerHTML = `
+      <div class="sub-item-num">${String(i+1).padStart(2,'0')}</div>
+      <div class="sub-item-label">${item.label}</div>
+      <div class="sub-badge">${item.badge}</div>
+    `;
+    div.onclick = () => showCmd(key, i);
+    list.appendChild(div);
+  });
+  showScreen('screen-sub');
+}
+
+function goBack() {
+  showScreen('screen-menu');
+}
+
+// =====================
+// COMMAND SCREEN
+// =====================
+function showCmd(key, idx) {
+  const cfg = SUBMENUS[key];
+  const item = cfg.items[idx];
+  currentCmdConfig = { key, idx, item };
+  lastSubScreen = 'screen-sub';
+
+  document.getElementById('cmd-title').textContent = item.label;
+  document.getElementById('terminal').classList.remove('show');
+  document.getElementById('terminal').innerHTML = '';
+
+  const fieldsDiv = document.getElementById('cmd-fields');
+  fieldsDiv.innerHTML = '';
+
+  if (item.fields && item.fields.length > 0) {
+    const panel = document.createElement('div');
+    panel.className = 'cmd-panel';
+    panel.setAttribute('data-label', 'INPUT_PARAMS');
+    panel.style.marginBottom = '12px';
+    item.fields.forEach(f => {
+      const d = document.createElement('div');
+      d.className = 'cmd-field';
+      d.innerHTML = `<div class="cmd-label">// ${f.label}</div>
+        <input class="cmd-input" data-fid="${f.id}" placeholder="${f.label}" oninput="updatePreview()" />`;
+      panel.appendChild(d);
+    });
+    if (item.hint) {
+      const hint = document.createElement('div');
+      hint.style.cssText = 'font-size:10px;color:var(--yellow);letter-spacing:1px;margin-top:8px;';
+      hint.textContent = '⚠ ' + item.hint;
+      panel.appendChild(hint);
+    }
+    fieldsDiv.appendChild(panel);
+  }
+
+  updatePreview();
+  showScreen('screen-cmd');
+}
+
+function getFieldValues() {
+  const item = currentCmdConfig.item;
+  if (!item.fields || item.fields.length === 0) return [];
+  return item.fields.map(f => {
+    const el = document.querySelector(`.cmd-input[data-fid="${f.id}"]`);
+    return el ? el.value.trim() : '';
+  });
+}
+
+function buildCmd() {
+  const item = currentCmdConfig.item;
+  const vals = getFieldValues();
+  if (vals.some(v => !v) && item.fields && item.fields.length > 0) return null;
+  return item.cmd(...vals);
+}
+
+function updatePreview() {
+  const item = currentCmdConfig.item;
+  const vals = getFieldValues();
+  const allFilled = !vals.some(v => !v);
+  let preview;
+  if (!item.fields || item.fields.length === 0) {
+    preview = item.cmd();
+  } else if (allFilled) {
+    preview = item.cmd(...vals);
+  } else {
+    const placeholders = item.fields.map((f,i) => vals[i] || `<${f.id}>`);
+    preview = item.cmd(...placeholders);
+  }
+  document.getElementById('cmd-preview').textContent = preview;
+}
+
+function copyCmd() {
+  const cmd = document.getElementById('cmd-preview').textContent;
+  navigator.clipboard.writeText(cmd).then(() => notify('⎘ Commande copiée dans le presse-papier'));
+}
+
+function goBackCmd() {
+  showSub(currentCmdConfig.key);
+}
+
+// =====================
+// EXECUTE (simulated)
+// =====================
+function executeCmd() {
+  const item = currentCmdConfig.item;
+  const vals = getFieldValues();
+  if (item.fields && item.fields.length > 0 && vals.some(v => !v)) {
+    notify('⚠ Tous les champs sont requis', true);
+    return;
+  }
+
+  if (item.isUrl) {
+    addTerminalLine(`▶ Ouverture navigateur : ${item.isUrl}`, 'info');
+    document.getElementById('terminal').classList.add('show');
+    window.open(item.isUrl, '_blank');
+    logEntry(item.label, vals[0] || item.isUrl, item.cmd(), 0);
+    return;
+  }
+
+  const cmd = item.cmd(...vals);
+  const spinner = document.getElementById('run-spinner');
+  spinner.style.display = 'inline-block';
+
+  const terminal = document.getElementById('terminal');
+  terminal.classList.add('show');
+  terminal.innerHTML = '';
+
+  addTerminalLine(`$ ${cmd}`, 'info');
+  addTerminalLine('');
+
+  // Simulate output
+  const tool = cmd.split(' ')[0];
+  const target = vals[0] || 'target';
+  setTimeout(() => simulateOutput(tool, target, cmd, vals), 400);
+
+  setTimeout(() => { spinner.style.display = 'none'; }, 3000);
+}
+
+function addTerminalLine(text, cls='') {
+  const t = document.getElementById('terminal');
+  const span = document.createElement('span');
+  span.className = 't-line ' + cls;
+  span.textContent = text;
+  t.appendChild(span);
+  t.scrollTop = t.scrollHeight;
+}
+
+function simulateOutput(tool, target, cmd, vals) {
+  const outputs = {
+    nmap: [
+      `Starting Nmap 7.94 ( https://nmap.org )`,
+      `Nmap scan report for ${target}`,
+      `Host is up (0.0012s latency).`,
+      `PORT     STATE  SERVICE  VERSION`,
+      `22/tcp   open   ssh      OpenSSH 8.9`,
+      `80/tcp   open   http     Apache httpd 2.4.52`,
+      `443/tcp  open   https    nginx 1.18.0`,
+      `3306/tcp closed mysql`,
+      `Nmap done: 1 IP address (1 host up) scanned in 4.32 seconds`,
+    ],
+    theHarvester: [
+      `*******************************************************************`,
+      `*  _   _                                   _                     *`,
+      `* | |_| |__   ___  /\\  /\\  __ _ _ ____   _| | ___  ___ |_ _|   *`,
+      `*******************************************************************`,
+      `[*] Target: ${target}`,
+      `[*] Searching Google...`,
+      `[*] Emails found: 3`,
+      `  admin@${target}`,
+      `  contact@${target}`,
+      `  security@${target}`,
+      `[*] Hosts found: 5`,
+    ],
+    sherlock: [
+      `[*] Checking username "${target}" on:`,
+      `[+] Twitter:       https://twitter.com/${target}`,
+      `[+] Instagram:     https://instagram.com/${target}`,
+      `[+] GitHub:        https://github.com/${target}`,
+      `[-] LinkedIn:      Not Found`,
+      `[+] Reddit:        https://reddit.com/u/${target}`,
+      `[*] 4 accounts found`,
+    ],
+    traceroute: [
+      `traceroute to ${target} (${target}), 30 hops max, 60 byte packets`,
+      ` 1  _gateway (192.168.1.1)  0.412 ms  0.389 ms  0.366 ms`,
+      ` 2  10.0.0.1 (10.0.0.1)  1.231 ms  1.204 ms  1.187 ms`,
+      ` 3  * * *`,
+      ` 4  ${target}  12.3 ms  11.9 ms  12.1 ms`,
+    ],
+    nikto: [
+      `- Nikto v2.1.6`,
+      `---------------------------------------------------------------------------`,
+      `+ Target IP:          ${target}`,
+      `+ Target Hostname:    ${target}`,
+      `+ Target Port:        80`,
+      `+ Server: Apache/2.4.52`,
+      `+ /: The anti-clickjacking X-Frame-Options header is not present.`,
+      `+ /admin/: Admin directory found! Directory indexing found.`,
+      `+ /backup/: Backup directory found.`,
+      `+ OSVDB-3268: /css/: Directory indexing found.`,
+      `+ 8045 requests: 0 error(s) and 4 item(s) reported on remote host`,
+    ],
+    hping3: [
+      `HPING ${target}: S set, 40 headers + 0 data bytes`,
+      `len=46 ip=${target} ttl=64 DF id=0 sport=80 flags=SA seq=0 win=65535 rtt=0.4 ms`,
+      `len=46 ip=${target} ttl=64 DF id=0 sport=443 flags=SA seq=1 win=65535 rtt=0.3 ms`,
+      `--- ${target} hping statistic ---`,
+      `2 packets transmitted, 2 packets received, 0% packet loss`,
+    ],
+    default: [
+      `[*] Initialisation...`,
+      `[*] Connexion à ${target}...`,
+      `[+] Hôte actif détecté`,
+      `[*] Scan en cours...`,
+      `[+] Résultat: 3 éléments trouvés`,
+      `[✓] Terminé.`,
+    ]
+  };
+
+  const lines = outputs[tool] || outputs.default;
+  let i = 0;
+  const interval = setInterval(() => {
+    if (i >= lines.length) {
+      clearInterval(interval);
+      addTerminalLine('');
+      addTerminalLine('✅ Export JSON: ./MDOS_RESULTS/.../' + tool + '_output.json', 'success');
+      addTerminalLine('✅ Global JSON: ./MDOS_RESULTS/mdos_global.json', 'success');
+      logEntry(tool, vals[0] || target, cmd, 0);
+      return;
+    }
+    const l = lines[i];
+    const cls = l.startsWith('[+]') || l.startsWith('✅') ? 'success'
+              : l.startsWith('[-]') || l.startsWith('ERR') ? 'error'
+              : l.startsWith('[*]') || l.startsWith('[!]') ? 'warn' : '';
+    addTerminalLine(l, cls);
+    i++;
+  }, 160);
+}
+
+// =====================
+// SESSION LOG
+// =====================
+function logEntry(tool, target, cmd, rc) {
+  sessionLog.push({
+    tool, target, cmd, rc,
+    date: new Date().toLocaleTimeString('fr-FR')
+  });
+}
+
+// =====================
+// REPORT
+// =====================
+function showReport() {
+  const c = document.getElementById('report-content');
+  if (sessionLog.length === 0) {
+    c.innerHTML = '<div class="report-empty">⚠ AUCUN RÉSULTAT EN SESSION<br><br>Exécute des commandes pour les voir ici.</div>';
+  } else {
+    c.innerHTML = sessionLog.map(e => `
+      <div class="report-entry">
+        <div class="entry-tool">${e.tool.toUpperCase()}</div>
+        <div style="flex:1">
+          <div class="entry-target">${e.target}</div>
+          <div class="entry-cmd">${e.cmd}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="entry-time">${e.date}</div>
+          <div class="${e.rc === 0 ? 'entry-rc-ok' : 'entry-rc-err'}">${e.rc === 0 ? '✓ OK' : '✗ ERR'}</div>
+        </div>
+      </div>
+    `).join('');
+  }
+  showScreen('screen-report');
+}
+
+// =====================
+// QUIT
+// =====================
+function doQuit() {
+  notify(`👋 Bye ${pseudo} ! Session fermée.`);
+  setTimeout(() => {
+    document.getElementById('inp-pseudo').value = '';
+    document.getElementById('inp-totp').value = '';
+    document.getElementById('login-error').classList.remove('show');
+    document.getElementById('login-progress').classList.remove('show');
+    document.getElementById('pbar').style.width = '0%';
+    document.getElementById('status-user').textContent = 'NOT_AUTH';
+    sessionLog = [];
+    pseudo = '';
+    showScreen('screen-login');
+  }, 1200);
+}
+</script>
+</body>
+</html>
