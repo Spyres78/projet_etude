@@ -65,9 +65,8 @@ pip install pyotp fpdf2 notion-client requests
 ## Installation
 
 ```bash
-git clone https://github.com/votre-user/mdos.git
-cd mdos
-pip install -r requirements.txt
+git clone https://github.com/Spyres78/projet_etude
+cd projet_etude
 ```
 
 ### Configuration 2FA — Google Authenticator sur Kali Linux
