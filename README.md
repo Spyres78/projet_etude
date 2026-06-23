@@ -111,34 +111,26 @@ pip install pyotp reportlab fpdf2 requests pyperclip
 
 ### Configurer Google Authenticator (2FA)
 
+> ⚠️ **IMPORTANT** — La 2FA nécessite l'installation de Google Authenticator sur le système d'exploitation. À faire **une seule fois**, avec l'utilisateur qui lancera le script (pas nécessairement root).
 
-IMPORTANT necessite l'installation de Google AUTH sur le l'OS
-
-1) Prérequis (sur la machine)
-   
+**Étape 1 — Installer les dépendances système**
 ```bash
 sudo apt update
 sudo apt install -y libpam-google-authenticator oathtool qrencode
 ```
-ÉTAPE 2 — Générer ton secret Google Authenticator (OBLIGATOIRE)
 
-⚠️ À faire UNE SEULE FOIS, avec l’utilisateur qui lancera le script (pas forcément root).
-
-Dans le terminal, tapez :
-
+**Étape 2 — Générer ton secret (OBLIGATOIRE)**
 ```bash
 google-authenticator -t
 ```
 
-Ce que ça va faire
+Cette commande va :
+- Générer un secret (clé secrète TOTP)
+- Créer le fichier `~/.google_authenticator`
+- Afficher un QR code à scanner avec l'application Google Authenticator sur ton téléphone
 
-Générer un secret (clé secrète)
+Suis les instructions à l'écran et scanne le QR code avec l'app **Google Authenticator** (iOS / Android). À chaque lancement de MDOS, tu devras saisir le code à 6 chiffres affiché dans l'application.
 
-Créer le fichier :
-
-```bash
-~/.google_authenticator
-```
 ---
 
 ## Lancement
