@@ -114,17 +114,21 @@ pip install pyotp reportlab fpdf2 requests pyperclip
 
 IMPORTANT necessite l'installation de Google AUTH sur le l'OS
 
-1) Prérequis (sur ta machine)
+1) Prérequis (sur la machine)
+   
+```bash
 sudo apt update
 sudo apt install -y libpam-google-authenticator oathtool qrencode
-
+```
 ÉTAPE 2 — Générer ton secret Google Authenticator (OBLIGATOIRE)
 
-⚠️ À faire UNE SEULE FOIS, avec l’utilisateur qui lancera ton script (pas forcément root).
+⚠️ À faire UNE SEULE FOIS, avec l’utilisateur qui lancera le script (pas forcément root).
 
-Dans le terminal, tape :
+Dans le terminal, tapez :
 
+```bash
 google-authenticator -t
+```
 
 Ce que ça va faire
 
@@ -132,8 +136,9 @@ Générer un secret (clé secrète)
 
 Créer le fichier :
 
+```bash
 ~/.google_authenticator
-
+```
 ---
 
 ## Lancement
