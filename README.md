@@ -1,4 +1,4 @@
-# MDOS — Framework de Pentest en CLI
+# MDOS — Multitool OSINT & Detection Operations System
 
 ```
 ███╗   ███╗██████╗  ██████╗ ███████╗
@@ -11,148 +11,132 @@
     access granted ▓▓▓▓▓▓▓▓▓
 ```
 
-> **MDOS** est un outil CLI de pentest et d'audit de sécurité qui centralise les outils d'analyse réseau, de reconnaissance, d'énumération, de sniffing et de scan web dans une interface interactive avec export JSON/PDF/Notion.
+> **MDOS** est un outil toolbox, disponible en interface CLI et GUI (tkinter), avec authentification 2FA, exécution de commandes intégrée et export des résultats en JSON, PDF ou Notion.
+
+> ⚠️ **Usage légal uniquement.** Cet outil est destiné aux tests d'intrusion autorisés, à la formation en cybersécurité et aux environnements de lab. Toute utilisation sur des systèmes sans autorisation explicite est illégale.
+
+---
+
+## Fichiers du projet
+
+| Fichier | Description |
+|---|---|
+| `mdos.py` | Interface CLI (terminal ANSI) |
+| `mdos_gui.py` | Interface graphique tkinter (style terminal hacker) |
+| `mdos_gui.html` | Prototype HTML de l'interface GUI |
+| `export_pdf.py` | Génération de rapports PDF via ReportLab |
+| `export_notion.py` | Export des résultats vers Notion |
+| `extract_users.py` | Enumération d'utilisateurs WordPress via l'API REST |
 
 ---
 
 ## Fonctionnalités
 
-### Authentification 2FA
-Connexion sécurisée via Google Authenticator (TOTP). Compatible avec `pyotp` ou `oathtool` en fallback.
+### Authentification 2FA (TOTP)
+- Vérifie un code Google Authenticator (6 chiffres) à chaque lancement
+- Lit le secret depuis `~/.google_authenticator`
+- Utilise `pyotp` (avec fallback `oathtool`)
+- En CLI : option `--no-2fa` pour désactiver
 
-### Modules disponibles
+### 6 modules de sécurité
 
-| # | Catégorie | Outils intégrés |
-|---|-----------|-----------------|
-| 1 | **Network Scan** | Nmap, UnicornScan, Hping3 |
-| 2 | **Footprinting & Reconnaissance** | theHarvester, Sherlock, CEWL, traceroute, domainfy, searchfy, WordPress user enum |
-| 3 | **Enumeration** | Nmap NSE (NetBIOS, DNS, SMTP), snmp-check, snmpwalk, ldapsearch |
-| 4 | **Analyse de vulnérabilité** | Nikto, CWE/CVE/NVD (navigateur) |
-| 5 | **Sniffing** | macof (MAC flooding), arpspoof (ARP spoofing), macchanger |
-| 6 | **Hacking Web Servers** | Nmap HTTP scripts (http-enum, http-waf-detect, http-trace…), Uniscan |
-| 7 | **Rapport** | Export PDF + export Notion, reset des résultats |
+**01 — Network Scan**
+Nmap (ports, services, OS, scan agressif), UnicornScan (OS via TTL), SX (ARP local), Hping3 (SYN, UDP, ICMP, port range)
 
-### Export automatique
-Chaque commande exécutée génère :
-- Un fichier JSON horodaté dans `MDOS_RESULTS/<catégorie>/`
-- Une entrée dans le fichier global `MDOS_RESULTS/mdos_global.json`
-- Une synchronisation Notion (si configurée)
+**02 — Footprinting & Reconnaissance**
+theHarvester (emails Google/LinkedIn), Sherlock (profils réseaux sociaux), CEWL (wordlist), Traceroute, domainfy, searchfy, WordPress user enumeration, et ouverture de ressources web (Censys, DomainTools Whois, SearchFTPS, mattw.io)
+
+**03 — Enumeration**
+NetBIOS (nbstat NSE), SNMP (snmp-check, snmpwalk, nmap UDP), LDAP (ldapsearch), DNS (broadcast discovery, brute force), SMTP (enum-users, open-relay)
+
+**04 — Analyse de vulnérabilité**
+Nikto (scan web), liens vers CWE/CVE MITRE et NVD NIST
+
+**05 — Sniffing**
+MAC Flooding (macof), ARP Spoofing (arpspoof), MAC Spoofing (macchanger)
+
+**06 — Hacking Web Servers**
+Nmap scripts HTTP (http-enum, hostmap-bfk, http-trace, WAF detect), Uniscan (simple et dynamique)
+
+### Parsers de sortie
+Les sorties des outils sont automatiquement parsées et structurées en JSON :
+- **nmap** : ports ouverts, services, OS, latence, adresse MAC
+- **hping3** : ports répondus, stats RTT
+- **traceroute** : liste des hops
+- **nikto** : findings, serveur détecté
+- **theHarvester** : emails et hosts trouvés
+
+### Export des résultats
+- **JSON** : un fichier par commande + fichier global `MDOS_RESULTS/mdos_global.json`
+- **PDF** : rapport mis en page via ReportLab (fallback fpdf2, puis HTML)
+- **Notion** : export vers une base de données Notion via l'API
+- **Notes manuelles** : ajout de notes avec récupération automatique depuis le presse-papier
 
 ---
 
 ## Prérequis
 
 ### Système
-- Linux (Kali, Parrot OS ou toute distribution Debian-based recommandée)
+- Linux (Kali recommandé)
 - Python 3.10+
+- `tkinter` (pour la version GUI)
 
-### Outils système (selon modules utilisés)
+### Outils système à installer
 ```bash
-sudo apt install nmap hping3 unicornscan theharvester sherlock cewl \
-                 nikto macof dsniff macchanger ldap-utils snmp-check \
-                 snmpwalk traceroute uniscan
+sudo apt install nmap hping3 unicornscan macof arpspoof macchanger \
+                 nikto traceroute ldap-utils snmp uniscan cewl
+pip install sherlock
 ```
 
 ### Dépendances Python
 ```bash
-pip install pyotp fpdf2 notion-client requests
+pip install pyotp reportlab fpdf2 requests pyperclip
 ```
 
-> Les modules internes `extract_users`, `export_pdf` et `export_notion` doivent être présents dans le même répertoire que `main.py`.
+Pour l'export Notion :
+```bash
+pip install notion-client  # ou selon l'implémentation dans export_notion.py
+```
 
 ---
 
 ## Installation
 
 ```bash
-git clone https://github.com/Spyres78/projet_etude
-cd projet_etude
+git clone <url-du-repo>
+cd mdos
+
+pip install pyotp reportlab fpdf2 requests pyperclip
 ```
 
-### Configuration 2FA — Google Authenticator sur Kali Linux
-
-#### Prérequis
-- Kali Linux à jour
-- Accès `sudo`
-- Application Google Authenticator installée sur smartphone
-
-#### 1. Installation des dépendances
-
-```bash
-sudo apt update
-sudo apt install -y libpam-google-authenticator oathtool qrencode
-```
-
-#### 2. Génération du secret (à faire une seule fois)
-
-Lancer avec l'utilisateur qui utilisera le script :
-
+### Configurer Google Authenticator (2FA)
 ```bash
 google-authenticator -t
+# Le secret est sauvegardé dans ~/.google_authenticator
 ```
-
-Réponses recommandées :
-
-| Question | Réponse |
-|----------|---------|
-| Tokens basés sur le temps | `y` |
-| Mise à jour du fichier | `y` |
-| Interdire la réutilisation des tokens | `y` |
-| Fenêtre de temps étendue | `n` |
-| Activer le rate limiting | `y` |
-
-#### 3. Scanner le QR Code
-
-Un QR Code s'affiche dans le terminal. Dans Google Authenticator sur le téléphone : **Ajouter un compte → Scanner le QR Code**.
-
-#### 4. Vérification
-
-```bash
-# Vérifier que le fichier existe
-ls -la ~/.google_authenticator
-
-# Tester un code (remplacer VOTRE_SECRET par la clé affichée)
-oathtool --totp -b "VOTRE_SECRET"
-```
-
-Le code généré doit correspondre à celui affiché dans l'application.
-
-#### 5. Sécurité
-
-```bash
-chmod 600 ~/.google_authenticator
-```
-
-> **Important :** ne jamais partager `~/.google_authenticator`. Conserver les codes de secours en lieu sûr.
-
-#### Fonctionnement dans MDOS
-
-1. MDOS lit le secret dans `~/.google_authenticator`
-2. L'utilisateur saisit le code affiché dans son application
-3. Le code est vérifié via `pyotp` (ou `oathtool` en fallback)
-4. Code valide → MDOS démarre / Code invalide → fermeture immédiate
-
-### Configuration Notion (optionnel)
-Dans `export_notion.py`, renseigne ton token d'intégration et l'ID de ta database Notion.
 
 ---
 
-## Utilisation
+## Lancement
 
+### Interface CLI
 ```bash
-python3 main.py
+python3 mdos.py
+# Sans 2FA (dev/lab uniquement)
+python3 mdos.py --no-2fa
+# Dossier de résultats personnalisé
+python3 mdos.py --results-dir /chemin/vers/resultats
 ```
 
-### Options CLI
-
-| Option | Description |
-|--------|-------------|
-| `--no-2fa` | Désactive l'authentification Google Authenticator |
-| `--results-dir <chemin>` | Définit un répertoire personnalisé pour les résultats |
-
-**Exemple :**
+### Interface GUI (tkinter)
 ```bash
-python3 main.py --no-2fa --results-dir ~/pentest/resultats
+python3 mdos_gui.py
+```
+
+### Générer un rapport PDF manuellement
+```bash
+python3 export_pdf.py
+# Lit MDOS_RESULTS/mdos_global.json et génère ~/MDOS_Report_YYYY-MM-DD.pdf
 ```
 
 ---
@@ -161,11 +145,11 @@ python3 main.py --no-2fa --results-dir ~/pentest/resultats
 
 ```
 MDOS_RESULTS/
-├── mdos_global.json          # Toutes les entrées agrégées
+├── mdos_global.json          # Toutes les actions de toutes les sessions
 ├── scans/
 │   └── nmap_2025-01-01_12-00-00.json
 ├── footprinting/
-│   └── theHarvester_2025-01-01_12-05-00.json
+│   └── theHarvester_...json
 ├── enumeration/
 ├── vuln/
 ├── sniffing/
@@ -181,23 +165,45 @@ Chaque fichier JSON contient :
   "target": "192.168.1.1",
   "date": "2025-01-01T12:00:00+01:00",
   "user": "kali",
-  "host": "machine",
-  "command": "nmap -p- 192.168.1.1",
+  "host": "kali-machine",
+  "command": "nmap -sV 192.168.1.1",
   "returncode": 0,
+  "status": "success",
+  "parsed": { "parser": "nmap", "ports": [...], "os": [...] },
   "raw_output": "..."
 }
 ```
 
 ---
 
-## Avertissement légal
+## Interface GUI
 
-> **MDOS est un outil de sécurité offensive destiné exclusivement à des fins d'apprentissage, de tests sur des systèmes vous appartenant, ou dans le cadre d'une mission d'audit avec autorisation écrite explicite.**
->
-> Toute utilisation non autorisée sur des systèmes tiers est illégale et peut entraîner des poursuites pénales. Les auteurs déclinent toute responsabilité en cas d'usage malveillant.
+L'interface graphique (`mdos_gui.py`) reprend le design du prototype HTML avec :
+- Thème terminal hacker (vert `#00ff88` sur fond noir `#020c06`)
+- Barre de statut avec horloge temps réel et point clignotant
+- Écrans : Login → Menu principal → Sous-menu → Exécution → Rapport de session
+- Mise à l'échelle dynamique selon la résolution (référence 1920×1080, min 880×600)
+- Terminal intégré avec coloration syntaxique (succès/erreur/warning/info)
+- Export PDF, JSON et Notion depuis l'écran rapport
 
 ---
 
-## Licence
+## Configuration Notion (optionnel)
 
-Ce projet est distribué sous licence MIT. Voir le fichier `LICENSE` pour plus de détails.
+Renseignez votre clé d'API et l'ID de votre base de données Notion dans `export_notion.py` :
+
+```python
+NOTION_TOKEN = "secret_xxx"
+NOTION_DATABASE_ID = "xxx"
+```
+
+---
+
+## Avertissement légal
+
+MDOS est un outil destiné exclusivement à :
+- Des tests d'intrusion sur des systèmes dont vous avez l'autorisation écrite
+- Des environnements de lab / CTF / formation
+- De la recherche en cybersécurité
+
+Toute utilisation malveillante ou non autorisée est strictement interdite et engage la seule responsabilité de l'utilisateur.
